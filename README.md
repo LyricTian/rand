@@ -23,6 +23,13 @@ rand.MustRandom(6, rand.Ldigit)
 // 939430
 ```
 
+### Generate a short string
+
+```go
+rand.MustShortStr([]byte("https://www.google.com"), 6, rand.Ldigit)
+// [XZ1599 Xy8I3U KAHc2K NftD8p]
+```
+
 #### Random flag:
 
 - Ldigit

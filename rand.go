@@ -2,7 +2,9 @@ package rand
 
 import (
 	"bytes"
+	"crypto/md5"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 )
@@ -43,30 +45,16 @@ func MustRandom(length, flag int) string {
 // Random generate a random string specifying the length of the random number
 // and the random flag
 func Random(length, flag int) (string, error) {
-	if length == 0 {
+	if length < 1 {
 		return "", ErrInvalidLength
 	}
 
-	var source []byte
-
-	if flag&Ldigit > 0 {
-		source = append(source, digits...)
+	source, err := getFlagSource(flag)
+	if err != nil {
+		return "", err
 	}
 
-	if flag&LlowerCase > 0 {
-		source = append(source, lowerCaseLetters...)
-	}
-
-	if flag&LupperCase > 0 {
-		source = append(source, upperCaseLetters...)
-	}
-
-	sourceLen := len(source)
-	if sourceLen == 0 {
-		return "", ErrInvalidFlag
-	}
-
-	b, err := randomBytesMod(length, byte(sourceLen))
+	b, err := randomBytesMod(length, byte(len(source)))
 	if err != nil {
 		return "", err
 	}
@@ -77,6 +65,45 @@ func Random(length, flag int) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// MustShortStr get a set of short strings of length (panic if an error occurs)
+func MustShortStr(data []byte, length, flag int) []string {
+	g, err := ShortStr(data, length, flag)
+	if err != nil {
+		panic(err)
+	}
+	return g
+}
+
+// ShortStr get a set of short strings of length
+func ShortStr(data []byte, length, flag int) ([]string, error) {
+	if length < 4 || length > 10 {
+		return nil, ErrInvalidLength
+	}
+
+	source, err := getFlagSource(flag)
+	if err != nil {
+		return nil, err
+	}
+	sourceLen := len(source)
+
+	g := make([]string, 4)
+	m := md5.Sum(data)
+
+	for i := 0; i < 4; i++ {
+		p := m[i*4 : i*4+4]
+		u := int(binary.BigEndian.Uint32(p))
+
+		var b bytes.Buffer
+		for j := 0; j < length; j++ {
+			b.WriteByte(source[u%sourceLen])
+			u = u >> uint(32/length)
+		}
+		g[i] = b.String()
+	}
+
+	return g, nil
 }
 
 // MustUUID generate a random UUID (panic if an error occurs)
@@ -110,6 +137,28 @@ func UUID() (string, error) {
 	hex.Encode(dst[24:], buf[10:])
 
 	return string(dst), nil
+}
+
+func getFlagSource(flag int) ([]byte, error) {
+	var source []byte
+
+	if flag&Ldigit > 0 {
+		source = append(source, digits...)
+	}
+
+	if flag&LlowerCase > 0 {
+		source = append(source, lowerCaseLetters...)
+	}
+
+	if flag&LupperCase > 0 {
+		source = append(source, upperCaseLetters...)
+	}
+
+	sourceLen := len(source)
+	if sourceLen == 0 {
+		return nil, ErrInvalidFlag
+	}
+	return source, nil
 }
 
 func randomBytesMod(length int, mod byte) ([]byte, error) {
